@@ -1,0 +1,6 @@
+{
+  "name": "attendance-mailer",
+  "private": true,
+  "type": "module",
+  "description": "Password-gated tool that drafts attendance emails in Gmail (Vercel)"
+}

@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attendance Mailer</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1f2328; --muted:#6b7280; --line:#e2e5e9; --accent:#1a73e8; --accent2:#e8f0fe; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d1117; --card:#161b22; --text:#e6edf3; --muted:#8d96a0; --line:#30363d; --accent:#4c8df6; --accent2:#1c2a44; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:1240px; margin:0 auto; padding:16px 16px 24px; }
+  h1 { font-size:19px; margin:0; }
+  .top { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+  .top form { font-size:13px; color:var(--muted); }
+
+  /* Laptop: Who + What on the left, Send on the right (sticky, always in view) */
+  .layout { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:14px; align-items:start; }
+  .col { display:flex; flex-direction:column; gap:14px; min-width:0; }
+  .send { position:sticky; top:16px; }
+  .send .preview { max-height:calc(100vh - 260px); min-height:180px; overflow:auto; }
+
+  .step { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; position:relative; }
+  .step h2 { font-size:13px; font-weight:600; color:var(--muted); margin:0 0 10px; display:flex; justify-content:space-between; align-items:center; min-height:24px; }
+  .step h2 .links button { background:none; border:0; color:var(--accent); font:inherit; cursor:pointer; padding:0 0 0 12px; }
+  .step h2 .links button.on { text-decoration:underline; text-underline-offset:3px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:999px; padding:5px 11px; cursor:pointer; font:inherit; font-size:14px; display:flex; align-items:center; gap:6px; }
+  .chip.on { background:var(--accent2); border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .chip .n { background:var(--accent); color:#fff; border-radius:999px; font-size:11px; min-width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; }
+  .seg { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:6px; margin-bottom:12px; }
+  .seg button { border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:8px; padding:7px 4px; cursor:pointer; font:inherit; font-size:13px; line-height:1.25; }
+  .seg button.on { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:500; }
+  .fields { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .fields > div.hide { display:none; }
+  label { display:block; font-size:12px; color:var(--muted); margin:0 0 4px; }
+  input[type=text], input[type=email], input[type=date], textarea {
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); font:inherit;
+  }
+  input[type=date] { min-height:40px; }
+  textarea { min-height:200px; resize:vertical; font-family:ui-monospace,Menlo,monospace; font-size:13px; }
+  .gap { margin-top:10px; }
+  details.wording { margin-top:10px; }
+  details summary { cursor:pointer; color:var(--muted); font-size:13px; }
+  details.wording[open] summary { margin-bottom:8px; }
+  .meta { font-size:13px; color:var(--muted); margin-bottom:10px; word-break:break-word; }
+  .meta b { color:var(--text); font-weight:500; }
+  .preview { border:1px solid var(--line); border-radius:8px; padding:14px 16px; background:#fff; color:#222; font-family:Arial,sans-serif; font-size:14px; }
+  .preview p:first-child { margin-top:0; } .preview p:last-child { margin-bottom:0; }
+  .go { width:100%; margin-top:12px; padding:12px; border:0; border-radius:10px; background:var(--accent); color:#fff; font:inherit; font-weight:600; font-size:16px; cursor:pointer; }
+  .sub { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap; }
+  .sub span { color:var(--muted); font-size:12px; }
+  .link { background:none; border:0; color:var(--accent); cursor:pointer; font:inherit; font-size:13px; padding:0; }
+  .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
+  .check { display:flex; align-items:center; gap:6px; font-size:14px; margin-top:10px; color:var(--text); }
+
+  /* Settings: gear in the Send card's top-right, opens a floating panel */
+  .settings { position:absolute; top:10px; right:12px; z-index:5; }
+  .settings > summary { list-style:none; width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--muted); }
+  .settings > summary::-webkit-details-marker { display:none; }
+  .settings > summary:hover, .settings[open] > summary { color:var(--accent); border-color:var(--accent); }
+  .settings .panel { position:absolute; right:0; top:38px; width:min(360px, calc(100vw - 48px)); background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; box-shadow:0 12px 32px rgba(0,0,0,.18); }
+  .settings .panel h3 { margin:0 0 6px; font-size:14px; }
+
+  #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1f2328; color:#fff; padding:10px 16px; border-radius:8px; opacity:0; transition:opacity .2s; pointer-events:none; max-width:90vw; z-index:10; }
+  #toast.show { opacity:1; }
+
+  /* Mobile: one column; every field stacked full-width */
+  @media (max-width: 760px) {
+    .wrap { padding:12px 12px 20px; }
+    .layout { grid-template-columns:1fr; gap:12px; }
+    .col { gap:12px; }
+    .send { position:relative; top:auto; }
+    .send .preview { max-height:none; }
+    .seg { grid-template-columns:1fr 1fr; }
+    .seg button { padding:9px 6px; font-size:14px; }
+    .seg button:last-child:nth-child(odd) { grid-column:span 2; }
+    .fields { grid-template-columns:1fr; }
+    .step { padding:12px 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1>Attendance Mailer</h1>
+    <form method="post" action="/logout"><span id="me"></span> <button class="link">Log out</button></form>
+  </div>
+
+  <div class="layout">
+    <div class="col">
+      <div class="step">
+        <h2>1 · Who <span class="links"><button id="selSelf">Self</button><button id="selAll">All</button><button id="selNone">None</button></span></h2>
+        <div class="chips" id="chips"></div>
+      </div>
+
+      <div class="step">
+        <h2>2 · What</h2>
+        <div class="seg" id="seg"></div>
+        <div class="fields">
+          <div><label id="dFromLabel">Date</label><input type="date" id="dFrom"></div>
+          <div id="dToBox"><label>To date (optional)</label><input type="date" id="dTo"></div>
+          <div><label>Reason</label><input type="text" id="reason"></div>
+          <div><label>Subject</label><input type="text" id="subject" value="Intern Attendance"></div>
+        </div>
+        <details class="wording">
+          <summary>Edit wording</summary>
+          <div><label>Body — {range} {date} {from} {to} {reason} {name} {table}</label><textarea id="body"></textarea></div>
+        </details>
+      </div>
+    </div>
+
+    <div class="step send">
+      <h2>3 · Send</h2>
+      <details class="settings" id="settings">
+        <summary title="Settings" aria-label="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </summary>
+        <div class="panel">
+          <h3>Settings</h3>
+          <p class="hint">Defaults are set in Vercel; changes here apply to this visit only.</p>
+          <input type="hidden" id="fromEmail"><input type="hidden" id="fromName">
+          <div><label>To</label><input type="text" id="toFixed"></div>
+          <div class="gap"><label>Cc (always)</label><input type="text" id="ccFixed"></div>
+          <div class="gap"><label>Bcc (always)</label><input type="text" id="bccFixed" placeholder="optional"></div>
+          <label class="check"><input type="checkbox" id="bccPeople"> Put selected people in Bcc instead of Cc</label>
+        </div>
+      </details>
+      <div class="meta" id="meta"></div>
+      <div class="preview" id="preview"></div>
+      <button class="go" id="draftBtn">Open Gmail draft</button>
+      <div class="sub">
+        <span>Body is copied — in Gmail click the message area and press ⌘V.</span>
+        <button class="link" id="copyBtn">Copy body only</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const OUTRO = "\n\n{table}\n\nI am sending this email as requested for tracking purposes.\n\nThank you for your understanding.\n\nRegards,\n{name}";
+const TEMPLATES = {
+  leave: {
+    label: "Leave", reason: "exams at our college", range: true,
+    body: "Dear Ma’am,\n\nI would like to inform you that the following interns will be on leave {range}, due to {reason}." + OUTRO,
+  },
+  halfday: {
+    label: "Afternoon logout", reason: "an exam at our college",
+    body: "Dear Ma’am,\n\nI would like to inform you that the following interns will be logging out from the office in the afternoon on {date}, due to {reason}." + OUTRO,
+  },
+  login: {
+    label: "Afternoon login", reason: "an exam at our college",
+    body: "Dear Ma’am,\n\nI would like to inform you that the following interns will be reporting to the office in the afternoon on {date}, due to {reason}." + OUTRO,
+  },
+  present: {
+    label: "Present", reason: "postponement of an exam",
+    body: "Dear Ma’am,\n\nI would like to inform you that the following interns were present on {date}, due to {reason}.\n\n{table}\n\nThank you for your understanding.\n\nRegards,\n{name}",
+  },
+  custom: { label: "Custom", reason: "", body: "Dear Ma’am,\n\n\n\n{table}\n\nRegards,\n{name}" },
+};
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("am_" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("am_" + k, JSON.stringify(v)); } catch {} },
+};
+
+const $ = id => document.getElementById(id);
+let people = []; // [{name, email}] from the USERS env var, loaded after sign-in
+let selected = []; // emails in tick order
+let selfMode = false; // only me: no table, "the following …" → "I"
+let tpl = "leave";
+
+// Settings
+// Sender (Gmail + name) comes from the server for the signed-in password.
+// To / Cc / Bcc defaults come from the MAIL_TO / MAIL_CC / MAIL_BCC env vars (loaded after sign-in).
+// Edits here apply to this visit only, so env changes always take effect.
+["toFixed", "ccFixed", "bccFixed"].forEach(k => $(k).addEventListener("input", render));
+$("bccPeople").checked = store.get("bccPeople", false);
+$("bccPeople").onchange = () => { store.set("bccPeople", $("bccPeople").checked); render(); };
+
+// Templates
+for (const [k, t] of Object.entries(TEMPLATES)) {
+  const b = document.createElement("button");
+  b.textContent = t.label; b.dataset.k = k;
+  b.onclick = () => { tpl = k; applyTemplate(); };
+  $("seg").appendChild(b);
+}
+function applyTemplate() {
+  const t = TEMPLATES[tpl];
+  $("body").value = t.body;
+  $("reason").value = t.reason;
+  $("dToBox").classList.toggle("hide", !t.range);
+  $("dFromLabel").textContent = t.range ? "From date" : "Date";
+  [...$("seg").children].forEach(b => b.classList.toggle("on", b.dataset.k === tpl));
+  render();
+}
+["subject", "dFrom", "dTo", "reason", "body"].forEach(id => $(id).addEventListener("input", render));
+
+// Default date = tomorrow
+const tm = new Date(); tm.setDate(tm.getDate() + 1);
+$("dFrom").value = tm.toISOString().slice(0, 10);
+
+// People
+function renderPeople() {
+  $("selSelf").classList.toggle("on", selfMode);
+  $("chips").innerHTML = "";
+  people.forEach(p => {
+    const idx = selected.indexOf(p.email);
+    const c = document.createElement("button");
+    c.className = "chip" + (idx >= 0 ? " on" : "");
+    c.innerHTML = idx >= 0 ? `<span class="n">${idx + 1}</span>` : "";
+    c.append(p.name);
+    c.onclick = () => {
+      if (selfMode) { selfMode = false; selected = []; }
+      selected = selected.includes(p.email) ? selected.filter(x => x !== p.email) : [...selected, p.email];
+      renderPeople(); render();
+    };
+    $("chips").appendChild(c);
+  });
+}
+$("selSelf").onclick = () => {
+  const me = $("fromEmail").value.trim().toLowerCase();
+  const self = people.find(p => p.email.toLowerCase() === me);
+  selfMode = true; selected = self ? [self.email] : []; renderPeople(); render();
+};
+$("selAll").onclick = () => { selfMode = false; people.forEach(p => { if (!selected.includes(p.email)) selected.push(p.email); }); renderPeople(); render(); };
+$("selNone").onclick = () => { selfMode = false; selected = []; renderPeople(); render(); };
+
+// Build email
+const fmt = iso => { if (!iso) return "__-__-____"; const [y, m, d] = iso.split("-"); return `${d}-${m}-${y}`; };
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const selPeople = () => selected.map(e => people.find(p => p.email === e)).filter(Boolean);
+
+function tableHTML() {
+  const td = "border:1px solid #999;padding:6px 12px;";
+  const rows = selPeople().map((p, i) =>
+    `<tr><td style="${td}text-align:center">${i + 1}</td><td style="${td}">${esc(p.name)}</td></tr>`).join("");
+  return `<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px">` +
+    `<tr><th style="${td}background:#f2f2f2">Sl No.</th><th style="${td}background:#f2f2f2">Name</th></tr>${rows}</table>`;
+}
+function tableText() {
+  return "Sl No.\tName\n" + selPeople().map((p, i) => `${i + 1}\t${p.name}`).join("\n");
+}
+// Dates are wrapped in \u0001…\u0002 markers: bold in the HTML body, stripped in plain text
+const hl = d => `\u0001${d}\u0002`;
+function fill(s) {
+  const from = hl(fmt($("dFrom").value)), to = hl(fmt($("dTo").value));
+  const range = (!$("dTo").value || $("dTo").value === $("dFrom").value) ? `on ${from}` : `from ${from} to ${to}`;
+  if (selfMode) s = s.replace(/the following [a-z]+ were\b/g, "I was").replace(/the following [a-z]+\b/g, "I");
+  s = s.replaceAll("{date}", from).replaceAll("{from}", from).replaceAll("{to}", to)
+          .replaceAll("{range}", range).replaceAll("{reason}", $("reason").value).replaceAll("{name}", $("fromName").value);
+  return selfMode ? s.replace(/\bour\b/g, "my").replace(/\bOur\b/g, "My") : s;
+}
+function bodyHTML() {
+  const para = t => t.trim() ? t.trim().split(/\n{2,}/).map(p => `<p>${esc(p).replace(/\n/g, "<br>").replace(/\u0001(.*?)\u0002/g, "<b>$1</b>")}</p>`).join("") : "";
+  const parts = fill($("body").value).split("{table}");
+  return `<div style="font-family:Arial,sans-serif;font-size:14px">` +
+    parts.map(para).join(selfMode ? "" : tableHTML()) + `</div>`;
+}
+function bodyText() { return fill($("body").value).replace(/[\u0001\u0002]/g, "").replaceAll("{table}", selfMode ? "" : tableText()).replace(/\n{3,}/g, "\n\n"); }
+
+function splitAddr(s) { return s.split(/[,;]/).map(x => x.trim()).filter(Boolean); }
+function recipients() {
+  const me = $("fromEmail").value.trim().toLowerCase();
+  const picked = selPeople().map(p => p.email).filter(e => e.toLowerCase() !== me);
+  const cc = splitAddr($("ccFixed").value), bcc = splitAddr($("bccFixed").value);
+  ($("bccPeople").checked ? bcc : cc).push(...picked);
+  return { to: splitAddr($("toFixed").value), cc, bcc, picked: picked.length };
+}
+
+function render() {
+  const r = recipients();
+  const short = a => a.replace(/\s*<.*>/, "");
+  const pickedNote = r.picked ? `${r.picked} ${r.picked > 1 ? "people" : "person"}` : "";
+  const ccTxt = [...splitAddr($("ccFixed").value).map(short), $("bccPeople").checked ? "" : pickedNote].filter(Boolean).join(" + ");
+  const bccTxt = [...splitAddr($("bccFixed").value).map(short), $("bccPeople").checked ? pickedNote : ""].filter(Boolean).join(" + ");
+  $("meta").innerHTML = `To <b>${esc(r.to.map(short).join(", "))}</b>` +
+    (ccTxt ? ` · Cc <b>${esc(ccTxt)}</b>` : "") + (bccTxt ? ` · Bcc <b>${esc(bccTxt)}</b>` : "") +
+    ` · <b>${esc($("subject").value)}</b>`;
+  $("preview").innerHTML = bodyHTML();
+}
+
+async function copyRich() {
+  const html = bodyHTML(), text = bodyText();
+  try {
+    await navigator.clipboard.write([new ClipboardItem({
+      "text/html": new Blob([html], { type: "text/html" }),
+      "text/plain": new Blob([text], { type: "text/plain" }),
+    })]);
+    return true;
+  } catch {
+    // Fallback: select the rendered preview and copy it
+    const sel = getSelection(), range = document.createRange();
+    range.selectNodeContents($("preview")); sel.removeAllRanges(); sel.addRange(range);
+    const ok = document.execCommand("copy"); sel.removeAllRanges(); return ok;
+  }
+}
+
+$("draftBtn").onclick = async () => {
+  if (!selected.length && !selfMode) return toast("Pick at least one person first");
+  const ok = await copyRich();
+  const r = recipients();
+  const q = new URLSearchParams({ view: "cm", fs: "1", to: r.to.join(","), su: $("subject").value });
+  if (r.cc.length) q.set("cc", r.cc.join(","));
+  if (r.bcc.length) q.set("bcc", r.bcc.join(","));
+  const acct = $("fromEmail").value.trim();
+  const url = `https://mail.google.com/mail/${acct ? "?authuser=" + encodeURIComponent(acct) + "&" : "?"}${q}`;
+  window.open(url, "_blank");
+  toast(ok ? "Body copied — click in the Gmail message and press ⌘V" : "Couldn’t copy automatically — use “Copy body only”");
+};
+$("copyBtn").onclick = async () => toast(await copyRich() ? "Body with table copied" : "Copy failed");
+
+// Close the settings panel on outside click or Esc
+document.addEventListener("click", e => { if (!$("settings").contains(e.target)) $("settings").open = false; });
+document.addEventListener("keydown", e => { if (e.key === "Escape") $("settings").open = false; });
+
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 3500); }
+
+(async () => {
+  const r = await fetch("/api/me", { cache: "no-store" });
+  if (!r.ok) return location.replace("/login");
+  const me = await r.json();
+  $("fromEmail").value = me.email;
+  $("fromName").value = me.name;
+  people = me.people;
+  $("toFixed").value = me.to;
+  $("ccFixed").value = me.cc;
+  $("bccFixed").value = me.bcc;
+  $("me").textContent = `${me.name} · ${me.email} ·`;
+  renderPeople(); applyTemplate();
+})();
+</script>
+</body>
+</html>
