@@ -330,7 +330,8 @@ function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add
   $("ccFixed").value = me.cc;
   $("bccFixed").value = me.bcc;
   $("me").textContent = `${me.name} · ${me.email} ·`;
-  renderPeople(); applyTemplate();
+  applyTemplate();
+  $("selSelf").click(); // start in Self mode
 })();
 </script>
 </body>
