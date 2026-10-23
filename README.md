@@ -1,8 +1,11 @@
 # Attendance Mailer
 
-Drafts attendance emails in Gmail. The site is password-protected by Vercel Routing
-Middleware ([middleware.js](middleware.js)); each password maps to a sender (Gmail + name) kept in
-Vercel environment variables, which are never sent to the browser.
+Drafts attendance emails in Gmail. Login is checked by Vercel Functions in [api/](api); each password maps to
+a sender (Gmail + name) kept in Vercel environment variables, which are never sent to the browser.
+
+- `public/login.html` — the only public page
+- `app/index.html` — the app, served only by `api/app.js` to signed-in users (`/` is rewritten there)
+- `api/login.js`, `api/logout.js`, `api/me.js` — sign in, sign out, and the signed-in user's data
 
 ## Deploy on Vercel
 
@@ -27,7 +30,7 @@ Changing `SESSION_SECRET` logs everyone out.
 ## Notes
 
 - Passwords are stored only as PBKDF2-SHA256 hashes (100,000 rounds, random salt per user).
-- There is no attempt counter (middleware keeps no state), so use long random passwords.
+- There is no attempt counter (the functions keep no state), so use long random passwords.
   For extra protection add a rate-limit rule on `/login` in Vercel → Firewall.
 - The people list on the page is built from `USERS` (names and emails only — hashes never leave the server).
   To give someone a login without listing them on the page, add `"listed": false` to their entry.

@@ -1,4 +1,4 @@
-// Vercel Routing Middleware: password gate for the whole site.
+// Shared login/session helpers for the api/ functions (files starting with "_" are not deployed as endpoints).
 // Env vars (Vercel → Settings → Environment Variables), never sent to the browser:
 //   USERS          = [{"hash":"pbkdf2_sha256$…","email":"you@gmail.com","name":"Your Name"}, …]
 //                    (make hashes with tools/hash-passwords.html — plain passwords are never stored)
@@ -7,14 +7,14 @@
 //   MAIL_TO / MAIL_CC / MAIL_BCC = default recipients, comma separated, e.g. "Name <a@b.com>, c@d.com"
 const enc = new TextEncoder();
 
-const SECURITY_HEADERS = {
+export const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
   "Cache-Control": "no-store",
 };
 
-function users() {
+export function users() {
   try { return JSON.parse(process.env.USERS || "[]"); } catch { return []; }
 }
 
@@ -44,7 +44,7 @@ async function verifyHash(password, stored) {
   return safeEqual(b64url(new Uint8Array(bits)), hash64);
 }
 
-async function findByPassword(password) {
+export async function findByPassword(password) {
   let match = null;
   // Check every user so timing doesn't reveal how far down the list a match is.
   for (const u of users()) {
@@ -55,13 +55,13 @@ async function findByPassword(password) {
 
 // Cookie = "<email b64>.<expiry>.<sig>". The signature covers the user's password hash,
 // so changing or removing a password in USERS logs that person out.
-async function makeSession(u) {
+export async function makeSession(u) {
   const email = b64url(enc.encode(u.email));
   const exp = Date.now() + Number(process.env.SESSION_HOURS || 12) * 3600e3;
   return `${email}.${exp}.${await hmac(`s:${u.email}:${exp}:${u.hash}`)}`;
 }
 
-async function currentUser(request) {
+export async function currentUser(request) {
   const m = (request.headers.get("cookie") || "").match(/(?:^|;\s*)am_session=([^;]+)/);
   if (!m) return null;
   const [email64, exp, sig] = m[1].split(".");
@@ -73,46 +73,15 @@ async function currentUser(request) {
   return safeEqual(await hmac(`s:${u.email}:${exp}:${u.hash}`), sig) ? u : null;
 }
 
-const cookie = (value, maxAge) => `am_session=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+export const cookie = (value, maxAge) => `am_session=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 
-function redirect(request, to, setCookie) {
+export function redirect(request, to, setCookie) {
   const headers = new Headers({ ...SECURITY_HEADERS, Location: new URL(to, request.url).toString() });
   if (setCookie) headers.set("Set-Cookie", setCookie);
   return new Response(null, { status: 303, headers });
 }
 
-export default async function middleware(request) {
-  if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
-    return new Response("Server not configured: set SESSION_SECRET (32+ chars) and USERS.", { status: 500 });
-  }
-  const { pathname } = new URL(request.url);
-  const user = await currentUser(request);
-
-  if (pathname === "/login" && request.method === "POST") {
-    const form = await request.formData().catch(() => null);
-    const u = await findByPassword(String(form?.get("password") || ""));
-    if (!u) return redirect(request, "/login?e=bad");
-    return redirect(request, "/", cookie(await makeSession(u), Number(process.env.SESSION_HOURS || 12) * 3600));
-  }
-
-  if (pathname === "/logout" && request.method === "POST") {
-    return redirect(request, "/login", cookie("", 0));
-  }
-
-  if (pathname === "/api/me") {
-    if (!user) return Response.json({ error: "unauthorized" }, { status: 401, headers: SECURITY_HEADERS });
-    // The people list is everyone in USERS (names + emails only), unless marked "listed": false.
-    const people = users().filter(u => u.listed !== false).map(u => ({ name: u.name, email: u.email }));
-    return Response.json({
-      email: user.email, name: user.name, people,
-      to: process.env.MAIL_TO || "", cc: process.env.MAIL_CC || "", bcc: process.env.MAIL_BCC || "",
-    }, { headers: SECURITY_HEADERS });
-  }
-
-  if (pathname === "/login" || pathname === "/login.html") {
-    return user ? redirect(request, "/") : undefined; // serve the login page
-  }
-
-  if (!user) return redirect(request, "/login");
-  // Signed in: fall through to the static app page.
-}
+export const configured = () => (process.env.SESSION_SECRET || "").length >= 32;
+export const notConfigured = () =>
+  new Response("Server not configured: set SESSION_SECRET (32+ chars) and USERS.", { status: 500, headers: SECURITY_HEADERS });
+export const sessionSeconds = () => Number(process.env.SESSION_HOURS || 12) * 3600;

@@ -19,13 +19,15 @@
 </style>
 </head>
 <body>
-<form method="post" action="/login">
+<form method="post" action="/api/login">
   <h1>Attendance Mailer</h1>
   <input type="password" name="password" placeholder="Password" autocomplete="current-password" required autofocus>
   <p class="err" id="err"></p>
   <button type="submit">Sign in</button>
 </form>
 <script>
+  // Already signed in? Go straight to the app.
+  fetch("/api/me", { cache: "no-store" }).then(r => { if (r.ok) location.replace("/"); }).catch(() => {});
   const e = new URLSearchParams(location.search).get("e");
   document.getElementById("err").textContent =
     e === "bad" ? "Wrong password." : e === "wait" ? "Too many attempts — try again in 15 minutes." : "";
