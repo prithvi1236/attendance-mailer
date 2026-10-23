@@ -6,6 +6,7 @@ a sender (Gmail + name) kept in Vercel environment variables, which are never se
 - `public/login.html` — the only public page
 - `app/index.html` — the app, served only by `api/app.js` to signed-in users (`/` is rewritten there)
 - `api/login.js`, `api/logout.js`, `api/me.js` — sign in, sign out, and the signed-in user's data
+- `/demo` — guest mode: the same app with made-up people and addresses; no login, no real data, Gmail never opens
 
 ## Deploy on Vercel
 

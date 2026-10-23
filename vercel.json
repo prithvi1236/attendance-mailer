@@ -2,7 +2,8 @@
   "outputDirectory": "public",
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/", "destination": "/api/app" }
+    { "source": "/", "destination": "/api/app" },
+    { "source": "/demo", "destination": "/api/app?demo=1" }
   ],
   "functions": {
     "api/app.js": { "includeFiles": "app/**" }
