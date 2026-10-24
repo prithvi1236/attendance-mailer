@@ -21,7 +21,7 @@
   /* Laptop: Who + What on the left, Send on the right (sticky, always in view) */
   .layout { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:14px; align-items:start; }
   .col { display:flex; flex-direction:column; gap:14px; min-width:0; }
-  .send { position:sticky; top:16px; }
+  .step.send { position:sticky; top:16px; }
   .send .preview { max-height:calc(100vh - 260px); min-height:180px; overflow:auto; }
 
   .step { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; position:relative; }
@@ -36,20 +36,25 @@
   .seg button { border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:8px; padding:7px 4px; cursor:pointer; font:inherit; font-size:13px; line-height:1.25; }
   .seg button.on { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:500; }
   label { display:block; font-size:12px; color:var(--muted); margin:0 0 4px; }
-  input[type=text], input[type=email], input[type=date], textarea {
+  input[type=text], input[type=email], input[type=date] {
     width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); font:inherit;
   }
   input[type=date] { min-height:40px; }
-  textarea { min-height:200px; resize:vertical; font-family:ui-monospace,Menlo,monospace; font-size:13px; }
   .gap { margin-top:10px; }
-  details.wording { margin-top:10px; }
   details summary { cursor:pointer; color:var(--muted); font-size:13px; }
-  details.wording[open] summary { margin-bottom:8px; }
   .meta { font-size:13px; color:var(--muted); margin-bottom:10px; word-break:break-word; }
   .meta b { color:var(--text); font-weight:500; }
   .preview { border:1px solid var(--line); border-radius:8px; padding:14px 16px; background:#fff; color:#222; font-family:Arial,sans-serif; font-size:14px; }
   .preview p:first-child { margin-top:0; } .preview p:last-child { margin-bottom:0; }
-  /* Editable bits inside the draft: dates open the calendar, the reason is typed in place */
+  .preview[contenteditable] { cursor:text; outline:none; }
+  .preview[contenteditable]:focus-within { border-color:var(--accent); }
+  .bar { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }
+  .bar .hint { margin:0; }
+  .ur { display:flex; gap:4px; flex:none; }
+  .ur button { width:30px; height:30px; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:8px; cursor:pointer; padding:0; }
+  .ur button:hover:not(:disabled) { color:var(--accent); border-color:var(--accent); }
+  .ur button:disabled { opacity:.35; cursor:default; }
+  /* Placeholders inside the draft are protected tokens: dates open the calendar, the reason is typed in place */
   .preview .pick-date, .preview .pick-reason { border-bottom:1.5px dashed #1a73e8; cursor:pointer; border-radius:3px; padding:0 2px; }
   .preview .pick-date:hover, .preview .pick-reason:hover, .preview .pick-reason:focus { background:#e8f0fe; outline:none; }
   .preview .pick-reason { cursor:text; }
@@ -96,7 +101,7 @@
     .wrap { padding:12px 12px 20px; }
     .layout { grid-template-columns:1fr; gap:12px; }
     .col { gap:12px; }
-    .send { position:relative; top:auto; }
+    .step.send { position:relative; top:auto; }
     .send .preview { max-height:none; }
     .seg { grid-template-columns:1fr 1fr; }
     .seg button { padding:9px 6px; font-size:14px; }
@@ -128,10 +133,6 @@
         <div class="seg" id="seg"></div>
         <input type="hidden" id="dFrom"><input type="hidden" id="dTo"><input type="hidden" id="reason">
         <div><label>Subject</label><input type="text" id="subject" value="Intern Attendance"></div>
-        <details class="wording">
-          <summary>Edit wording</summary>
-          <div><label>Body — {range} {date} {from} {to} {reason} {name} {table}</label><textarea id="body"></textarea></div>
-        </details>
       </div>
     </div>
 
@@ -152,8 +153,14 @@
         </div>
       </details>
       <div class="meta" id="meta"></div>
-      <p class="hint">Click a date in the draft to change it (pick one day, or two for a range). Click the reason to type it.</p>
-      <div class="preview" id="preview"></div>
+      <div class="bar">
+        <p class="hint">Type anywhere in the draft to change the wording. Click a date to pick one day or a range; click the reason to retype it.</p>
+        <span class="ur">
+          <button id="undoBtn" title="Undo (⌘Z)" aria-label="Undo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+          <button id="redoBtn" title="Redo (⇧⌘Z)" aria-label="Redo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+        </span>
+      </div>
+      <div class="preview" id="preview" contenteditable="true" spellcheck="true"></div>
       <div class="cal" id="cal" hidden></div>
       <button class="go" id="draftBtn">Open Gmail draft</button>
       <div class="sub">
@@ -188,7 +195,7 @@ const TEMPLATES = {
     label: "Present", reason: "postponement of an exam",
     body: "Dear Ma’am,\n\nI would like to inform you that the following interns were present {range}, due to {reason}.\n\n{table}\n\nThank you for your understanding.\n\nRegards,\n{name}",
   },
-  custom: { label: "Custom", reason: "", body: "Dear Ma’am,\n\n\n\n{table}\n\nRegards,\n{name}" },
+  custom: { label: "Custom", reason: "", body: "Dear Ma’am,\n\nType your message here.\n\n{table}\n\nRegards,\n{name}" },
 };
 
 const store = {
@@ -201,6 +208,7 @@ let people = []; // [{name, email}] from the USERS env var, loaded after sign-in
 let selected = []; // emails in tick order
 let selfMode = false; // only me: no table, "the following …" → "I"
 let tpl = "leave";
+let bodyTpl = ""; // the draft's wording, with {range} {date} {from} {to} {reason} {name} {table} placeholders
 
 // Settings
 // Sender (Gmail + name) comes from the server for the signed-in password.
@@ -219,12 +227,11 @@ for (const [k, t] of Object.entries(TEMPLATES)) {
 }
 function applyTemplate() {
   const t = TEMPLATES[tpl];
-  $("body").value = t.body;
+  bodyTpl = t.body;
   $("reason").value = t.reason;
-  [...$("seg").children].forEach(b => b.classList.toggle("on", b.dataset.k === tpl));
-  render();
+  render(); record();
 }
-["subject", "body"].forEach(id => $(id).addEventListener("input", render));
+$("subject").addEventListener("input", render);
 
 // Default date = tomorrow (local time, not UTC)
 const isoOf = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
@@ -272,28 +279,52 @@ function tableHTML() {
 function tableText() {
   return "Sl No.\tName\n" + selPeople().map((p, i) => `${i + 1}\t${p.name}`).join("\n");
 }
-// Dates are wrapped in \u0001…\u0002 markers: bold in the HTML body, stripped in plain text.
-// The reason is wrapped in \u0003…\u0004 so the preview can make it editable in place.
-const hl = d => `\u0001${d}\u0002`;
-function fill(s) {
-  const from = hl(fmt($("dFrom").value)), to = hl(fmt($("dTo").value));
-  const range = (!$("dTo").value || $("dTo").value === $("dFrom").value) ? `on ${from}` : `from ${from} to ${to}`;
-  if (selfMode) s = s.replace(/the following [a-z]+ were\b/g, "I was").replace(/the following [a-z]+\b/g, "I");
-  s = s.replaceAll("{date}", from).replaceAll("{from}", from).replaceAll("{to}", to)
-          .replaceAll("{range}", range).replaceAll("{reason}", `\u0003${$("reason").value}\u0004`).replaceAll("{name}", $("fromName").value);
-  return selfMode ? s.replace(/\bour\b/g, "my").replace(/\bOur\b/g, "My") : s;
+// Self mode: "the following interns" → "I", "our" → "my"
+const myFix = s => selfMode ? s.replace(/\bour\b/g, "my").replace(/\bOur\b/g, "My") : s;
+const selfFix = s => myFix(selfMode ? s.replace(/the following [a-z]+ were\b/g, "I was").replace(/the following [a-z]+\b/g, "I") : s);
+const PH = /\{(range|date|from|to|reason|name)\}/g;
+
+// Placeholder values. HTML dates are bold. In the live preview each value is a protected token
+// (contenteditable=false) so typing can't break it; dates open the calendar, the reason stays typeable.
+function tokens(html, live) {
+  const f = $("dFrom").value, t = $("dTo").value;
+  const d = iso => !html ? fmt(iso) : live ? `<b class="pick-date" title="Change date">${fmt(iso)}</b>` : `<b>${fmt(iso)}</b>`;
+  const reason = html ? esc(myFix($("reason").value)) : myFix($("reason").value);
+  const v = {
+    date: d(f), from: d(f), to: d(t),
+    range: !t || t === f ? `on ${d(f)}` : `from ${d(f)} to ${d(t)}`,
+    reason: live ? `<span class="pick-reason" contenteditable="plaintext-only" spellcheck="true">${reason}</span>` : reason,
+    name: html ? esc($("fromName").value) : $("fromName").value,
+  };
+  if (live) for (const k in v) v[k] = `<span class="tok" contenteditable="false" data-tok="${k}">${v[k]}</span>`;
+  return v;
 }
-// live = the on-screen preview, where dates and the reason are clickable
-function bodyHTML(live) {
-  const date = live ? `<b class="pick-date" title="Change date">$1</b>` : "<b>$1</b>";
-  const reason = live ? `<span class="pick-reason" contenteditable="plaintext-only" spellcheck="true">$1</span>` : "$1";
-  const para = t => t.trim() ? t.trim().split(/\n{2,}/).map(p => `<p>${esc(p).replace(/\n/g, "<br>")
-    .replace(/\u0001(.*?)\u0002/g, date).replace(/\u0003(.*?)\u0004/g, reason)}</p>`).join("") : "";
-  const parts = fill($("body").value).split("{table}");
-  return `<div style="font-family:Arial,sans-serif;font-size:14px">` +
-    parts.map(para).join(selfMode ? "" : tableHTML()) + `</div>`;
+function bodyParas(live) {
+  const v = tokens(true, live);
+  const para = t => t.trim() ? t.trim().split(/\n{2,}/).map(p => `<p>${esc(p).replace(/\n/g, "<br>").replace(PH, (_, k) => v[k])}</p>`).join("") : "";
+  // The live table stays as a (hidden in Self mode) token so edits keep its place
+  const table = live ? `<div class="tok" contenteditable="false" data-tok="table"${selfMode ? " hidden" : ""}>${selfMode ? "" : tableHTML()}</div>`
+    : selfMode ? "" : tableHTML();
+  return selfFix(bodyTpl).split("{table}").map(para).join(table);
 }
-function bodyText() { return fill($("body").value).replace(/[\u0001-\u0004]/g, "").replaceAll("{table}", selfMode ? "" : tableText()).replace(/\n{3,}/g, "\n\n"); }
+function bodyHTML() { return `<div style="font-family:Arial,sans-serif;font-size:14px">${bodyParas(false)}</div>`; }
+function bodyText() {
+  const v = tokens(false, false);
+  return selfFix(bodyTpl).replace(PH, (_, k) => v[k]).replaceAll("{table}", selfMode ? "" : tableText()).replace(/\n{3,}/g, "\n\n");
+}
+// Read the edited preview back into a template: tokens → {placeholders}, paragraphs → blank lines
+function toTemplate(node) {
+  let out = "";
+  for (const n of node.childNodes) {
+    if (n.nodeType === Node.TEXT_NODE) out += n.nodeValue.replace(/\u00a0/g, " ");
+    else if (n.nodeType !== Node.ELEMENT_NODE) continue;
+    else if (n.dataset.tok) out += n.dataset.tok === "table" ? "\n\n{table}\n\n" : `{${n.dataset.tok}}`;
+    else if (n.nodeName === "BR") out += "\n";
+    else if (n.nodeName === "P" || n.nodeName === "DIV") out += "\n\n" + toTemplate(n) + "\n\n";
+    else out += toTemplate(n);
+  }
+  return out;
+}
 
 function splitAddr(s) { return s.split(/[,;]/).map(x => x.trim()).filter(Boolean); }
 function recipients() {
@@ -313,7 +344,8 @@ function render() {
   $("meta").innerHTML = `To <b>${esc(r.to.map(short).join(", "))}</b>` +
     (ccTxt ? ` · Cc <b>${esc(ccTxt)}</b>` : "") + (bccTxt ? ` · Bcc <b>${esc(bccTxt)}</b>` : "") +
     ` · <b>${esc($("subject").value)}</b>`;
-  $("preview").innerHTML = bodyHTML(true);
+  $("preview").innerHTML = bodyParas(true);
+  [...$("seg").children].forEach(b => b.classList.toggle("on", b.dataset.k === tpl));
 }
 
 async function copyRich() {
@@ -347,14 +379,57 @@ $("draftBtn").onclick = async () => {
 };
 $("copyBtn").onclick = async () => toast(await copyRich() ? "Body with table copied" : "Copy failed");
 
-// Reason: typed straight into the draft. Re-render on blur so every {reason} and the clipboard copy match.
+// Editing the draft in place. The preview isn't re-rendered while typing (that would move the caret);
+// the template and reason are read back from it instead.
+document.execCommand("defaultParagraphSeparator", false, "p");
 $("preview").addEventListener("input", e => {
-  if (!e.target.classList.contains("pick-reason")) return;
-  $("reason").value = e.target.textContent;
-  $("preview").querySelectorAll(".pick-reason").forEach(el => { if (el !== e.target) el.textContent = e.target.textContent; });
+  if (e.target.classList.contains("pick-reason")) {
+    $("reason").value = e.target.textContent;
+    $("preview").querySelectorAll(".pick-reason").forEach(el => { if (el !== e.target) el.textContent = e.target.textContent; });
+  } else {
+    bodyTpl = toTemplate($("preview")).replace(/[ \t]*\n[ \t]*\n\s*/g, "\n\n").trim();
+  }
+  recordSoon();
 });
-$("preview").addEventListener("focusout", e => { if (e.target.classList.contains("pick-reason")) render(); });
-$("preview").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.classList.contains("pick-reason")) { e.preventDefault(); e.target.blur(); } });
+$("preview").addEventListener("beforeinput", e => {
+  const t = e.inputType;
+  if (t === "historyUndo" || t === "historyRedo") { e.preventDefault(); return t === "historyUndo" ? undo() : redo(); }
+  if (t.startsWith("format") || t === "insertFromDrop") e.preventDefault(); // bold/italic wouldn't survive; keep it plain
+});
+$("preview").addEventListener("paste", e => { // paste as plain text
+  e.preventDefault();
+  document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+});
+$("preview").addEventListener("keydown", e => {
+  if (e.key === "Enter" && e.target.classList.contains("pick-reason")) { e.preventDefault(); e.target.blur(); }
+  const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
+  if (mod && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  else if (mod && k === "y") { e.preventDefault(); redo(); }
+});
+
+// Undo / redo: snapshots of the draft (template, wording, reason, dates). Typing is grouped by pauses.
+const hist = { stack: [], i: -1, t: 0 };
+const snap = () => ({ tpl, body: bodyTpl, reason: $("reason").value, dFrom: $("dFrom").value, dTo: $("dTo").value });
+function record() {
+  clearTimeout(hist.t); hist.t = 0;
+  const s = snap();
+  if (JSON.stringify(s) === JSON.stringify(hist.stack[hist.i])) return;
+  hist.stack.splice(hist.i + 1, Infinity, s); hist.i = hist.stack.length - 1;
+  urButtons();
+}
+function recordSoon() { clearTimeout(hist.t); hist.t = setTimeout(record, 500); urButtons(true); }
+function restore(s) {
+  tpl = s.tpl; bodyTpl = s.body; $("reason").value = s.reason; $("dFrom").value = s.dFrom; $("dTo").value = s.dTo;
+  closeCal(); render(); urButtons();
+}
+function undo() { if (hist.t) record(); if (hist.i > 0) restore(hist.stack[--hist.i]); }
+function redo() { if (hist.t) record(); if (hist.i < hist.stack.length - 1) restore(hist.stack[++hist.i]); }
+function urButtons(pending) {
+  $("undoBtn").disabled = !pending && hist.i <= 0;
+  $("redoBtn").disabled = pending || hist.i >= hist.stack.length - 1;
+}
+$("undoBtn").onclick = undo;
+$("redoBtn").onclick = redo;
 
 // Dates: click one in the draft to open a calendar. First click = that single day,
 // a later day on the second click = range end. Clicking again starts over.
@@ -369,7 +444,7 @@ function openCal(anchor) {
   cal.style.top = (a.bottom - box.top + 6) + "px";
   cal.style.left = Math.max(8, Math.min(a.left - box.left, box.width - cal.offsetWidth - 8)) + "px";
 }
-function closeCal() { cal.hidden = true; }
+function closeCal() { if (!cal.hidden) { cal.hidden = true; record(); } } // one calendar visit = one undo step
 function drawCal() {
   const y = calMonth.getFullYear(), m = calMonth.getMonth();
   const from = $("dFrom").value, to = $("dTo").value || from, today = isoOf(new Date());
