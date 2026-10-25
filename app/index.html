@@ -11,18 +11,16 @@
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-  .wrap { max-width:1240px; margin:0 auto; padding:16px 16px 24px; }
+  .wrap { max-width:820px; margin:0 auto; padding:16px 16px 24px; }
   h1 { font-size:19px; margin:0; }
   .top { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
   .top form { font-size:13px; color:var(--muted); }
   .demo-bar { background:var(--accent2); color:var(--text); border:1px solid var(--accent); border-radius:10px; padding:8px 12px; font-size:13px; margin-bottom:12px; }
   .demo-bar a { color:var(--accent); font-weight:500; margin-left:6px; white-space:nowrap; }
 
-  /* Laptop: Who + What on the left, Send on the right (sticky, always in view) */
-  .layout { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:14px; align-items:start; }
-  .col { display:flex; flex-direction:column; gap:14px; min-width:0; }
-  .step.send { position:sticky; top:16px; }
-  .send .preview { max-height:calc(100vh - 260px); min-height:180px; overflow:auto; }
+  /* One column on every screen: Who, What, Send */
+  .layout, .col { display:flex; flex-direction:column; gap:14px; min-width:0; }
+  .send .preview { min-height:180px; }
 
   .step { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; position:relative; }
   .step h2 { font-size:13px; font-weight:600; color:var(--muted); margin:0 0 10px; display:flex; justify-content:space-between; align-items:center; min-height:24px; }
@@ -32,9 +30,16 @@
   .chip { border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:999px; padding:5px 11px; cursor:pointer; font:inherit; font-size:14px; display:flex; align-items:center; gap:6px; }
   .chip.on { background:var(--accent2); border-color:var(--accent); color:var(--accent); font-weight:500; }
   .chip .n { background:var(--accent); color:#fff; border-radius:999px; font-size:11px; min-width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; }
-  .seg { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:6px; margin-bottom:12px; }
+  .seg { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:6px; }
   .seg button { border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:8px; padding:7px 4px; cursor:pointer; font:inherit; font-size:13px; line-height:1.25; }
   .seg button.on { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:500; }
+  /* Half-day leave: one button with a small menu of its variants */
+  .dd { position:relative; display:grid; }
+  .dd > button small { display:block; font-size:11px; font-weight:400; opacity:.85; }
+  .dd .menu { position:absolute; top:calc(100% + 4px); left:0; right:0; min-width:160px; z-index:6; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:4px; box-shadow:0 12px 32px rgba(0,0,0,.18); }
+  .dd .menu button { display:block; width:100%; text-align:left; border:0; background:none; padding:8px 10px; border-radius:6px; font-size:13px; }
+  .dd .menu button:hover { background:var(--bg); }
+  .dd .menu button.on { background:var(--accent2); color:var(--accent); }
   label { display:block; font-size:12px; color:var(--muted); margin:0 0 4px; }
   input[type=text], input[type=email], input[type=date] {
     width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); font:inherit;
@@ -99,10 +104,7 @@
   /* Mobile: one column; every field stacked full-width */
   @media (max-width: 760px) {
     .wrap { padding:12px 12px 20px; }
-    .layout { grid-template-columns:1fr; gap:12px; }
-    .col { gap:12px; }
-    .step.send { position:relative; top:auto; }
-    .send .preview { max-height:none; }
+    .layout, .col { gap:12px; }
     .seg { grid-template-columns:1fr 1fr; }
     .seg button { padding:9px 6px; font-size:14px; }
     .seg button:last-child:nth-child(odd) { grid-column:span 2; }
@@ -124,7 +126,7 @@
   <div class="layout">
     <div class="col">
       <div class="step">
-        <h2>1 · Who <span class="links"><button id="selSelf">Self</button><button id="selAll">All</button><button id="selNone">None</button></span></h2>
+        <h2>1 · Who <span class="links"><button id="selAll">All</button><button id="selNone">None</button></span></h2>
         <div class="chips" id="chips"></div>
       </div>
 
@@ -132,7 +134,6 @@
         <h2>2 · What</h2>
         <div class="seg" id="seg"></div>
         <input type="hidden" id="dFrom"><input type="hidden" id="dTo"><input type="hidden" id="reason">
-        <div><label>Subject</label><input type="text" id="subject" value="Intern Attendance"></div>
       </div>
     </div>
 
@@ -153,6 +154,7 @@
         </div>
       </details>
       <div class="meta" id="meta"></div>
+      <div class="gap" style="margin:0 0 12px"><label>Subject</label><input type="text" id="subject" value="Intern Attendance"></div>
       <div class="bar">
         <p class="hint">Type anywhere in the draft to change the wording. Click a date to pick one day or a range; click the reason to retype it.</p>
         <span class="ur">
@@ -184,11 +186,11 @@ const TEMPLATES = {
     body: "Dear Ma’am,\n\nI would like to inform you that the following interns will be on leave {range}, due to {reason}." + OUTRO,
   },
   halfday: {
-    label: "Afternoon logout", reason: "an exam at our college",
+    label: "Afternoon logout", group: "half", reason: "an exam at our college",
     body: "Dear Ma’am,\n\nI would like to inform you that the following interns will be logging out from the office in the afternoon {range}, due to {reason}." + OUTRO,
   },
   login: {
-    label: "Afternoon login", reason: "an exam at our college",
+    label: "Afternoon login", group: "half", reason: "an exam at our college",
     body: "Dear Ma’am,\n\nI would like to inform you that the following interns will be reporting to the office in the afternoon {range}, due to {reason}." + OUTRO,
   },
   present: {
@@ -206,7 +208,7 @@ const store = {
 const $ = id => document.getElementById(id);
 let people = []; // [{name, email}] from the USERS env var, loaded after sign-in
 let selected = []; // emails in tick order
-let selfMode = false; // only me: no table, "the following …" → "I"
+let selfMode = false; // only you are selected: no table, "the following …" → "I" (set in renderPeople)
 let tpl = "leave";
 let bodyTpl = ""; // the draft's wording, with {range} {date} {from} {to} {reason} {name} {table} placeholders
 
@@ -218,20 +220,30 @@ let bodyTpl = ""; // the draft's wording, with {range} {date} {from} {to} {reaso
 $("bccPeople").checked = store.get("bccPeople", false);
 $("bccPeople").onchange = () => { store.set("bccPeople", $("bccPeople").checked); render(); };
 
-// Templates
+// Templates. Ones sharing a group become a single button with a menu of the variants.
+const GROUPS = { half: "Half-day leave" };
 for (const [k, t] of Object.entries(TEMPLATES)) {
   const b = document.createElement("button");
   b.textContent = t.label; b.dataset.k = k;
-  b.onclick = () => { tpl = k; applyTemplate(); };
-  $("seg").appendChild(b);
+  b.onclick = () => { tpl = k; closeMenus(); applyTemplate(); };
+  if (!t.group) { $("seg").appendChild(b); continue; }
+  let dd = $("seg").querySelector(`.dd[data-group="${t.group}"]`);
+  if (!dd) {
+    dd = document.createElement("div");
+    dd.className = "dd"; dd.dataset.group = t.group;
+    dd.innerHTML = `<button aria-haspopup="menu">${GROUPS[t.group]} ▾<small></small></button><div class="menu" role="menu" hidden></div>`;
+    dd.firstChild.onclick = () => { const m = dd.lastChild, open = m.hidden; closeMenus(); m.hidden = !open; };
+    $("seg").appendChild(dd);
+  }
+  dd.lastChild.appendChild(b);
 }
+function closeMenus() { $("seg").querySelectorAll(".menu").forEach(m => m.hidden = true); }
 function applyTemplate() {
   const t = TEMPLATES[tpl];
   bodyTpl = t.body;
   $("reason").value = t.reason;
   render(); record();
 }
-$("subject").addEventListener("input", render);
 
 // Default date = tomorrow (local time, not UTC)
 const isoOf = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
@@ -240,7 +252,8 @@ $("dFrom").value = isoOf(tm);
 
 // People
 function renderPeople() {
-  $("selSelf").classList.toggle("on", selfMode);
+  const me = $("fromEmail").value.trim().toLowerCase();
+  selfMode = selected.length === 1 && selected[0].toLowerCase() === me;
   $("chips").innerHTML = "";
   people.forEach(p => {
     const idx = selected.indexOf(p.email);
@@ -249,20 +262,19 @@ function renderPeople() {
     c.innerHTML = idx >= 0 ? `<span class="n">${idx + 1}</span>` : "";
     c.append(p.name);
     c.onclick = () => {
-      if (selfMode) { selfMode = false; selected = []; }
       selected = selected.includes(p.email) ? selected.filter(x => x !== p.email) : [...selected, p.email];
       renderPeople(); render();
     };
     $("chips").appendChild(c);
   });
 }
-$("selSelf").onclick = () => {
+function selectMe() {
   const me = $("fromEmail").value.trim().toLowerCase();
   const self = people.find(p => p.email.toLowerCase() === me);
-  selfMode = true; selected = self ? [self.email] : []; renderPeople(); render();
-};
-$("selAll").onclick = () => { selfMode = false; people.forEach(p => { if (!selected.includes(p.email)) selected.push(p.email); }); renderPeople(); render(); };
-$("selNone").onclick = () => { selfMode = false; selected = []; renderPeople(); render(); };
+  selected = self ? [self.email] : []; renderPeople(); render();
+}
+$("selAll").onclick = () => { people.forEach(p => { if (!selected.includes(p.email)) selected.push(p.email); }); renderPeople(); render(); };
+$("selNone").onclick = () => { selected = []; renderPeople(); render(); };
 
 // Build email
 const fmt = iso => { if (!iso) return "__-__-____"; const [y, m, d] = iso.split("-"); return `${d}-${m}-${y}`; };
@@ -342,10 +354,14 @@ function render() {
   const ccTxt = [...splitAddr($("ccFixed").value).map(short), $("bccPeople").checked ? "" : pickedNote].filter(Boolean).join(" + ");
   const bccTxt = [...splitAddr($("bccFixed").value).map(short), $("bccPeople").checked ? pickedNote : ""].filter(Boolean).join(" + ");
   $("meta").innerHTML = `To <b>${esc(r.to.map(short).join(", "))}</b>` +
-    (ccTxt ? ` · Cc <b>${esc(ccTxt)}</b>` : "") + (bccTxt ? ` · Bcc <b>${esc(bccTxt)}</b>` : "") +
-    ` · <b>${esc($("subject").value)}</b>`;
+    (ccTxt ? ` · Cc <b>${esc(ccTxt)}</b>` : "") + (bccTxt ? ` · Bcc <b>${esc(bccTxt)}</b>` : "");
   $("preview").innerHTML = bodyParas(true);
-  [...$("seg").children].forEach(b => b.classList.toggle("on", b.dataset.k === tpl));
+  $("seg").querySelectorAll("button[data-k]").forEach(b => b.classList.toggle("on", b.dataset.k === tpl));
+  $("seg").querySelectorAll(".dd").forEach(dd => {
+    const on = TEMPLATES[tpl].group === dd.dataset.group;
+    dd.firstChild.classList.toggle("on", on);
+    dd.querySelector("small").textContent = on ? TEMPLATES[tpl].label : "";
+  });
 }
 
 async function copyRich() {
@@ -365,7 +381,7 @@ async function copyRich() {
 }
 
 $("draftBtn").onclick = async () => {
-  if (!selected.length && !selfMode) return toast("Pick at least one person first");
+  if (!selected.length) return toast("Pick at least one person first");
   const ok = await copyRich();
   if (DEMO) return toast("Guest mode: body copied. Logged in, this opens a Gmail draft with To, Cc and Subject filled in.");
   const r = recipients();
@@ -476,8 +492,9 @@ cal.addEventListener("click", e => {
 document.addEventListener("click", e => {
   if (!$("settings").contains(e.target)) $("settings").open = false;
   if (!cal.contains(e.target) && !e.target.closest(".pick-date")) closeCal();
+  if (!e.target.closest(".dd")) closeMenus();
 });
-document.addEventListener("keydown", e => { if (e.key === "Escape") { $("settings").open = false; closeCal(); } });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { $("settings").open = false; closeCal(); closeMenus(); } });
 
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 3500); }
 
@@ -514,7 +531,7 @@ const DEMO_ME = {
   $("bccFixed").value = me.bcc;
   $("me").textContent = `${me.name} · ${me.email} ·`;
   applyTemplate();
-  $("selSelf").click(); // start in Self mode
+  selectMe(); // start with just you selected
 })();
 </script>
 </body>
