@@ -219,6 +219,41 @@ let bodyTpl = ""; // the draft's wording, with {range} {date} {from} {to} {reaso
 ["toFixed", "ccFixed", "bccFixed"].forEach(k => $(k).addEventListener("input", render));
 $("bccPeople").checked = store.get("bccPeople", false);
 $("bccPeople").onchange = () => { store.set("bccPeople", $("bccPeople").checked); render(); };
+$("subject").addEventListener("input", () => saveDraft());
+
+// Remember the draft across refresh/close, per signed-in user. People are stored as short
+// SHA-256 ids of their email (never names or addresses), and matched back against the current
+// USERS list on load. To / Cc / Bcc are not saved: they stay "this visit only".
+let draftKey = null; // set once the saved draft is restored, so the first render can't overwrite it
+const idOf = new Map(); // email → id
+async function hashId(s) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("am:" + s.trim().toLowerCase()));
+  return [...new Uint8Array(buf, 0, 8)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function saveDraft() {
+  if (!draftKey) return;
+  store.set(draftKey, {
+    tpl, body: bodyTpl, reason: $("reason").value, dFrom: $("dFrom").value, dTo: $("dTo").value,
+    subject: $("subject").value, people: selected.map(e => idOf.get(e)).filter(Boolean),
+  });
+}
+async function restoreDraft(myEmail) {
+  await Promise.all(people.map(async p => idOf.set(p.email, await hashId(p.email))));
+  const key = "draft_" + await hashId(myEmail);
+  const d = store.get(key, null);
+  if (d && TEMPLATES[d.tpl]) {
+    tpl = d.tpl; bodyTpl = d.body; $("reason").value = d.reason; $("subject").value = d.subject;
+    // A date already in the past isn't useful; fall back to tomorrow
+    if (d.dFrom >= isoOf(new Date())) { $("dFrom").value = d.dFrom; $("dTo").value = d.dTo > d.dFrom ? d.dTo : ""; }
+    const byId = new Map(people.map(p => [idOf.get(p.email), p.email]));
+    selected = d.people.map(id => byId.get(id)).filter(Boolean);
+    renderPeople(); render(); record();
+  } else {
+    applyTemplate();
+    selectMe(); // start with just you selected
+  }
+  draftKey = key; saveDraft();
+}
 
 // Templates. Ones sharing a group become a single button with a menu of the variants.
 const GROUPS = { half: "Half-day leave" };
@@ -356,6 +391,7 @@ function render() {
   $("meta").innerHTML = `To <b>${esc(r.to.map(short).join(", "))}</b>` +
     (ccTxt ? ` · Cc <b>${esc(ccTxt)}</b>` : "") + (bccTxt ? ` · Bcc <b>${esc(bccTxt)}</b>` : "");
   $("preview").innerHTML = bodyParas(true);
+  saveDraft();
   $("seg").querySelectorAll("button[data-k]").forEach(b => b.classList.toggle("on", b.dataset.k === tpl));
   $("seg").querySelectorAll(".dd").forEach(dd => {
     const on = TEMPLATES[tpl].group === dd.dataset.group;
@@ -433,7 +469,7 @@ function record() {
   hist.stack.splice(hist.i + 1, Infinity, s); hist.i = hist.stack.length - 1;
   urButtons();
 }
-function recordSoon() { clearTimeout(hist.t); hist.t = setTimeout(record, 500); urButtons(true); }
+function recordSoon() { saveDraft(); clearTimeout(hist.t); hist.t = setTimeout(record, 500); urButtons(true); }
 function restore(s) {
   tpl = s.tpl; bodyTpl = s.body; $("reason").value = s.reason; $("dFrom").value = s.dFrom; $("dTo").value = s.dTo;
   closeCal(); render(); urButtons();
@@ -530,8 +566,7 @@ const DEMO_ME = {
   $("ccFixed").value = me.cc;
   $("bccFixed").value = me.bcc;
   $("me").textContent = `${me.name} · ${me.email} ·`;
-  applyTemplate();
-  selectMe(); // start with just you selected
+  await restoreDraft(me.email);
 })();
 </script>
 </body>
