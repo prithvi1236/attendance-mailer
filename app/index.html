@@ -51,7 +51,13 @@
   .meta b { color:var(--text); font-weight:500; }
   .preview { border:1px solid var(--line); border-radius:8px; padding:14px 16px; background:#fff; color:#222; font-family:Arial,sans-serif; font-size:14px; }
   .preview p:first-child { margin-top:0; } .preview p:last-child { margin-bottom:0; }
-  .preview[contenteditable] { cursor:text; outline:none; }
+  .preview[contenteditable] { cursor:text; outline:none; padding-right:48px; }
+  .draft { position:relative; }
+  .copy-icon { position:absolute; top:8px; right:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; padding:0; border:1px solid #e2e5e9; border-radius:8px; background:#fff; color:#5f6368; cursor:pointer; transition:background-color .15s, color .15s; }
+  .copy-icon:hover { background:#e8f0fe; color:#1a73e8; }
+  .copy-icon:active { background:#d2e3fc; }
+  .copy-icon:focus-visible { outline:2px solid #1a73e8; outline-offset:1px; }
+  .copy-icon.done { color:#188038; border-color:#188038; }
   .preview[contenteditable]:focus-within { border-color:var(--accent); }
   .bar { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }
   .bar .hint { margin:0; }
@@ -81,6 +87,7 @@
   .go { width:100%; margin-top:12px; padding:12px; border:0; border-radius:10px; background:var(--accent); color:#fff; font:inherit; font-weight:600; font-size:16px; cursor:pointer; }
   .sub { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap; }
   .sub span { color:var(--muted); font-size:12px; }
+  .sub .sub-links { display:flex; flex-wrap:wrap; gap:14px; }
   .link { background:none; border:0; color:var(--accent); cursor:pointer; font:inherit; font-size:13px; padding:0; }
   .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
   .check { display:flex; align-items:center; gap:6px; font-size:14px; margin-top:10px; color:var(--text); }
@@ -162,12 +169,17 @@
           <button id="redoBtn" title="Redo (⇧⌘Z)" aria-label="Redo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
         </span>
       </div>
-      <div class="preview" id="preview" contenteditable="true" spellcheck="true"></div>
+      <div class="draft">
+        <div class="preview" id="preview" contenteditable="true" spellcheck="true"></div>
+        <button class="copy-icon" id="copyBtn" title="Copy body" aria-label="Copy body"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+      </div>
       <div class="cal" id="cal" hidden></div>
       <button class="go" id="draftBtn">Open Gmail draft</button>
       <div class="sub">
-        <span>Body is copied — in Gmail click the message area and press ⌘V.</span>
-        <button class="link" id="copyBtn">Copy body only</button>
+        <span id="pasteHint"></span>
+        <span class="sub-links">
+          <button class="link" id="tableImgBtn" title="Use this if the table is missing after pasting">Copy table as image</button>
+        </span>
       </div>
     </div>
   </div>
@@ -206,6 +218,10 @@ const store = {
 };
 
 const $ = id => document.getElementById(id);
+const MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+const PASTE = MOBILE ? "press and hold in the Gmail message, then tap Paste"
+  : /Mac/.test(navigator.userAgent) ? "click in the Gmail message and press ⌘V" : "click in the Gmail message and press Ctrl+V";
+$("pasteHint").textContent = `Body is copied — ${PASTE}.`;
 let people = []; // [{name, email}] from the USERS env var, loaded after sign-in
 let selected = []; // emails in tick order
 let selfMode = false; // only you are selected: no table, "the following …" → "I" (set in renderPeople)
@@ -324,7 +340,28 @@ function tableHTML() {
     `<tr><th style="${td}background:#f2f2f2">Sl No.</th><th style="${td}background:#f2f2f2">Name</th></tr>${rows}</table>`;
 }
 function tableText() {
-  return "Sl No.\tName\n" + selPeople().map((p, i) => `${i + 1}\t${p.name}`).join("\n");
+  return selPeople().map((p, i) => `${i + 1}. ${p.name}`).join("\n");
+}
+// The same table as a PNG, drawn locally, for when Gmail drops the pasted table
+function tablePNG() {
+  const rows = [["Sl No.", "Name"], ...selPeople().map((p, i) => [String(i + 1), p.name])];
+  const scale = 2, rowH = 32, pad = 12, c = document.createElement("canvas"), g = c.getContext("2d");
+  const font = bold => `${bold ? "bold " : ""}14px Arial, sans-serif`;
+  const width = col => Math.ceil(Math.max(...rows.map((r, i) => { g.font = font(i === 0); return g.measureText(r[col]).width; }))) + pad * 2;
+  const w0 = width(0), w1 = width(1);
+  c.width = (w0 + w1 + 1) * scale; c.height = (rows.length * rowH + 1) * scale;
+  g.scale(scale, scale);
+  g.fillStyle = "#fff"; g.fillRect(0, 0, w0 + w1 + 1, rows.length * rowH + 1);
+  g.textBaseline = "middle";
+  rows.forEach((r, i) => {
+    const y = i * rowH + .5;
+    if (i === 0) { g.fillStyle = "#f2f2f2"; g.fillRect(.5, y, w0 + w1, rowH); }
+    g.strokeStyle = "#999"; g.strokeRect(.5, y, w0, rowH); g.strokeRect(w0 + .5, y, w1, rowH);
+    g.fillStyle = "#222"; g.font = font(i === 0);
+    g.textAlign = "center"; g.fillText(r[0], w0 / 2 + .5, y + rowH / 2);
+    g.textAlign = i === 0 ? "center" : "left"; g.fillText(r[1], i === 0 ? w0 + w1 / 2 + .5 : w0 + pad + .5, y + rowH / 2);
+  });
+  return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error("PNG failed")), "image/png"));
 }
 // Self mode: "the following interns" → "I", "our" → "my"
 const myFix = s => selfMode ? s.replace(/\bour\b/g, "my").replace(/\bOur\b/g, "My") : s;
@@ -391,6 +428,7 @@ function render() {
   $("meta").innerHTML = `To <b>${esc(r.to.map(short).join(", "))}</b>` +
     (ccTxt ? ` · Cc <b>${esc(ccTxt)}</b>` : "") + (bccTxt ? ` · Bcc <b>${esc(bccTxt)}</b>` : "");
   $("preview").innerHTML = bodyParas(true);
+  $("tableImgBtn").hidden = selfMode || !selected.length; // no table to copy
   saveDraft();
   $("seg").querySelectorAll("button[data-k]").forEach(b => b.classList.toggle("on", b.dataset.k === tpl));
   $("seg").querySelectorAll(".dd").forEach(dd => {
@@ -427,9 +465,33 @@ $("draftBtn").onclick = async () => {
   const acct = $("fromEmail").value.trim();
   const url = `https://mail.google.com/mail/${acct ? "?authuser=" + encodeURIComponent(acct) + "&" : "?"}${q}`;
   window.open(url, "_blank");
-  toast(ok ? "Body copied — click in the Gmail message and press ⌘V" : "Couldn’t copy automatically — use “Copy body only”");
+  toast(ok ? `Body copied — ${PASTE}` : "Couldn’t copy automatically — use the copy icon in the draft");
 };
-$("copyBtn").onclick = async () => toast(await copyRich() ? "Body with table copied" : "Copy failed");
+const COPY_ICON = $("copyBtn").innerHTML, COPY_DONE = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>`;
+$("copyBtn").onclick = async e => {
+  const b = e.currentTarget, ok = await copyRich();
+  toast(ok ? (selfMode ? "Body copied" : "Body with table copied") : "Copy failed");
+  if (!ok) return;
+  b.innerHTML = COPY_DONE; b.classList.add("done");
+  clearTimeout(b._t); b._t = setTimeout(() => { b.innerHTML = COPY_ICON; b.classList.remove("done"); }, 1500);
+};
+// Copy the image; if the browser won't, offer the share sheet, then a download
+$("tableImgBtn").onclick = async () => {
+  const png = tablePNG(); // passed as a promise so Safari keeps the tap's permission
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    return toast(`Table image copied — ${PASTE}`);
+  } catch {}
+  const file = new File([await png], "attendance-table.png", { type: "image/png" });
+  if (navigator.canShare?.({ files: [file] })) {
+    try { return await navigator.share({ files: [file] }); }
+    catch (e) { if (e.name === "AbortError") return; }
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(file); a.download = file.name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  toast("Couldn’t copy the image, so it was saved — attach it to the draft");
+};
 
 // Editing the draft in place. The preview isn't re-rendered while typing (that would move the caret);
 // the template and reason are read back from it instead.
