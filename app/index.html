@@ -345,12 +345,12 @@ function tableText() {
 // The same table as a PNG, drawn locally, for when Gmail drops the pasted table
 function tablePNG() {
   const rows = [["Sl No.", "Name"], ...selPeople().map((p, i) => [String(i + 1), p.name])];
-  const scale = 2, rowH = 32, pad = 12, c = document.createElement("canvas"), g = c.getContext("2d");
+  // Drawn at 1x: Gmail shows an image at its pixel size, so this keeps the text at 14px like the body
+  const rowH = 34, pad = 12, c = document.createElement("canvas"), g = c.getContext("2d");
   const font = bold => `${bold ? "bold " : ""}14px Arial, sans-serif`;
   const width = col => Math.ceil(Math.max(...rows.map((r, i) => { g.font = font(i === 0); return g.measureText(r[col]).width; }))) + pad * 2;
   const w0 = width(0), w1 = width(1);
-  c.width = (w0 + w1 + 1) * scale; c.height = (rows.length * rowH + 1) * scale;
-  g.scale(scale, scale);
+  c.width = w0 + w1 + 1; c.height = rows.length * rowH + 1;
   g.fillStyle = "#fff"; g.fillRect(0, 0, w0 + w1 + 1, rows.length * rowH + 1);
   g.textBaseline = "middle";
   rows.forEach((r, i) => {
