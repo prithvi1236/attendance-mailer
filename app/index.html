@@ -345,21 +345,23 @@ function tableText() {
 // The same table as a PNG, drawn locally, for when Gmail drops the pasted table
 function tablePNG() {
   const rows = [["Sl No.", "Name"], ...selPeople().map((p, i) => [String(i + 1), p.name])];
-  // Drawn at 1x: Gmail shows an image at its pixel size, so this keeps the text at 14px like the body
-  const rowH = 34, pad = 12, c = document.createElement("canvas"), g = c.getContext("2d");
-  const font = bold => `${bold ? "bold " : ""}14px Arial, sans-serif`;
+  // Gmail shows an image at its pixel size, so this sets how large the table appears (1 = same as the 14px body).
+  // Everything is sized in whole pixels rather than scaled afterwards, so borders and text stay crisp at any scale.
+  const scale = 1, rowH = Math.round(34 * scale), pad = Math.round(12 * scale);
+  const c = document.createElement("canvas"), g = c.getContext("2d", { alpha: false }); // opaque: sharper text
+  const font = bold => `${bold ? "bold " : ""}${14 * scale}px Arial, sans-serif`;
   const width = col => Math.ceil(Math.max(...rows.map((r, i) => { g.font = font(i === 0); return g.measureText(r[col]).width; }))) + pad * 2;
   const w0 = width(0), w1 = width(1);
-  c.width = w0 + w1 + 1; c.height = rows.length * rowH + 1;
-  g.fillStyle = "#fff"; g.fillRect(0, 0, w0 + w1 + 1, rows.length * rowH + 1);
-  g.textBaseline = "middle";
+  c.width = w0 + w1 + 1; c.height = rows.length * rowH + 1; // resets the context, so styles are set below
+  g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+  g.textBaseline = "middle"; g.lineWidth = 1; g.strokeStyle = "#999";
   rows.forEach((r, i) => {
-    const y = i * rowH + .5;
-    if (i === 0) { g.fillStyle = "#f2f2f2"; g.fillRect(.5, y, w0 + w1, rowH); }
-    g.strokeStyle = "#999"; g.strokeRect(.5, y, w0, rowH); g.strokeRect(w0 + .5, y, w1, rowH);
+    const y = i * rowH, mid = y + Math.round(rowH / 2);
+    if (i === 0) { g.fillStyle = "#f2f2f2"; g.fillRect(0, y, c.width, rowH); }
+    g.strokeRect(.5, y + .5, w0, rowH); g.strokeRect(w0 + .5, y + .5, w1, rowH); // .5 = exactly one pixel wide
     g.fillStyle = "#222"; g.font = font(i === 0);
-    g.textAlign = "center"; g.fillText(r[0], w0 / 2 + .5, y + rowH / 2);
-    g.textAlign = i === 0 ? "center" : "left"; g.fillText(r[1], i === 0 ? w0 + w1 / 2 + .5 : w0 + pad + .5, y + rowH / 2);
+    g.textAlign = "center"; g.fillText(r[0], Math.round(w0 / 2), mid);
+    g.textAlign = i === 0 ? "center" : "left"; g.fillText(r[1], i === 0 ? w0 + Math.round(w1 / 2) : w0 + pad, mid);
   });
   return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error("PNG failed")), "image/png"));
 }
